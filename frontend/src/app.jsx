@@ -1,7 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import axios from "axios";
-import { Tree, TreeNode } from "react-organizational-chart";
-import MDXRenderer from "./components/MDXRenderer";
+import { useState, useRef, useEffect } from "react";
 
 function App() {
   const [ocrResult, setOcrResult] = useState(null);
@@ -33,7 +30,7 @@ function App() {
   const speechSynthesisRef = useRef(null);
 
   // Display mode for study materials
-  const [studyMaterialView, setStudyMaterialView] = useState("interactive"); // 'interactive' or 'mdx'
+  const [studyMaterialView, setStudyMaterialView] = useState("interactive");
 
   // Initialize speech recognition and synthesis
   useEffect(() => {
@@ -119,30 +116,40 @@ function App() {
     setError("");
 
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/generate-quiz",
-        {
-          context: ocrResult.corrected_text,
+      // Use formatted text if available, otherwise fall back to corrected text
+      const contextToUse = processedResult?.formatted_text || ocrResult.corrected_text;
+      
+      const res = await fetch("http://localhost:5000/api/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: ocrResult.corrected_text, // Keep for backward compatibility
+          formatted_text: contextToUse, // Pass the formatted text
           quiz_type: quizType,
           num_questions: numQuestions,
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
+        }),
+      });
 
-      setQuizQuestions(res.data.questions);
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate quiz");
+      }
+
+      setQuizQuestions(data.questions);
       setCurrentQuizIndex(0);
       setQuizAnswers({});
       setQuizResults(null);
       setShowQuizResults(false);
 
       // If voice mode, speak the first question
-      if (voiceQuizMode && res.data.questions.length > 0) {
+      if (voiceQuizMode && data.questions.length > 0) {
         setTimeout(() => {
-          speakQuizQuestion(res.data.questions[0]);
+          speakQuizQuestion(data.questions[0]);
         }, 1000);
       }
     } catch (err) {
-      setError("Failed to generate quiz. Check backend.");
+      setError("Failed to generate quiz: " + err.message);
     } finally {
       setQuizLoading(false);
     }
@@ -305,20 +312,26 @@ function App() {
     setError("");
 
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/chat",
-        {
+      const res = await fetch("http://localhost:5000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           question: currentQuestion.trim(),
           context: ocrResult.corrected_text,
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
+        }),
+      });
 
-      const tutorMessage = { type: "tutor", content: res.data.answer };
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to get tutor response");
+      }
+
+      const tutorMessage = { type: "tutor", content: data.answer };
       setChatMessages((prev) => [...prev, tutorMessage]);
       setCurrentQuestion("");
     } catch (err) {
-      setError("Failed to get tutor response. Check backend.");
+      setError("Failed to get tutor response: " + err.message);
       // Remove the user message if there was an error
       setChatMessages((prev) => prev.slice(0, -1));
     } finally {
@@ -333,24 +346,29 @@ function App() {
 
     setLoading(true);
     setError("");
-    setProcessedResult(null); // Reset processed results when new image uploaded
-    setChatMessages([]); // Clear chat history when new image uploaded
-    setQuizQuestions([]); // Clear quiz when new image uploaded
+    setProcessedResult(null);
+    setChatMessages([]);
+    setQuizQuestions([]);
     setQuizResults(null);
 
     try {
       const formData = new FormData();
-      formData.append("file", file); // Changed from "image" to "file"
+      formData.append("file", file);
 
-      const res = await axios.post("http://localhost:5000/api/ocr", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const res = await fetch("http://localhost:5000/api/ocr", {
+        method: "POST",
+        body: formData,
       });
 
-      setOcrResult(res.data);
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to process file");
+      }
+
+      setOcrResult(data);
     } catch (err) {
-      setError(
-        "Failed to process file. Check backend or try a different file format."
-      );
+      setError("Failed to process file: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -364,18 +382,24 @@ function App() {
     setError("");
 
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/process-corrected-text",
-        {
+      const res = await fetch("http://localhost:5000/api/process-corrected-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           text: ocrResult.corrected_text,
           title: "Study Notes",
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
+        }),
+      });
 
-      setProcessedResult(res.data);
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to process text");
+      }
+
+      setProcessedResult(data);
     } catch (err) {
-      setError("Failed to process text. Check backend.");
+      setError("Failed to process text: " + err.message);
     } finally {
       setProcessingLoading(false);
     }
@@ -407,11 +431,89 @@ function App() {
     }
   };
 
+  // Enhanced Mind Map Component
+  const MindMapVisualization = ({ mindmap }) => {
+    if (!mindmap || !mindmap.central_topic) {
+      return (
+        <div className="text-center py-8 text-gray-500">
+          No mind map data available
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto bg-gradient-to-br from-purple-50 to-pink-50 p-8 rounded-2xl border border-purple-200">
+        <div className="min-w-max">
+          {/* Central Topic */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg font-bold text-xl max-w-sm text-center">
+              {mindmap.central_topic}
+            </div>
+            <div className="w-1 h-8 bg-indigo-400 mt-4"></div>
+          </div>
+
+          {/* Branches */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {mindmap.branches?.map((branch, i) => (
+              <div key={i} className="flex flex-col items-center">
+                {/* Branch Name */}
+                <div className="p-4 bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-xl shadow-md font-semibold text-lg mb-4 text-center min-w-max">
+                  {branch.name}
+                </div>
+                
+                {/* Sub-branches */}
+                <div className="space-y-3 w-full">
+                  {branch.sub_branches?.map((sub, j) => (
+                    <div key={j} className="p-3 bg-gradient-to-r from-pink-300 to-purple-400 text-white rounded-lg shadow-sm font-medium text-sm text-center">
+                      {sub}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Markdown Renderer Component
+  const MarkdownRenderer = ({ content }) => {
+    if (!content) return <div>No content available</div>;
+    
+    // Simple markdown to HTML conversion for basic formatting
+    const parseMarkdown = (text) => {
+      return text
+        .replace(/^### (.*$)/gim, '<h3 class="text-xl font-bold mt-6 mb-4 text-gray-800">$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-8 mb-6 text-gray-800">$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-bold mt-10 mb-8 text-gray-800">$1</h1>')
+        .replace(/\*\*(.*)\*\*/gim, '<strong class="font-semibold text-gray-900">$1</strong>')
+        .replace(/\*(.*)\*/gim, '<em class="italic">$1</em>')
+        .replace(/^\- (.*$)/gim, '<li class="ml-4 mb-2">$1</li>')
+        .replace(/^(\d+)\. (.*$)/gim, '<li class="ml-4 mb-2">$2</li>')
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">$1</code>')
+        .replace(/^\> (.*$)/gim, '<blockquote class="border-l-4 border-blue-400 pl-4 italic text-gray-600 my-4">$1</blockquote>')
+        .replace(/\n\n/g, '</p><p class="mb-4 leading-relaxed text-gray-700">')
+        .replace(/\n/g, '<br>');
+    };
+
+    const htmlContent = parseMarkdown(content);
+
+    return (
+      <div 
+        className="prose max-w-none"
+        dangerouslySetInnerHTML={{ 
+          __html: `<p class="mb-4 leading-relaxed text-gray-700">${htmlContent}</p>` 
+        }} 
+      />
+    );
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto font-sans bg-gray-50 min-h-screen">
       <div className="bg-white rounded-2xl shadow-lg p-8">
         <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center">
-          📘 AI Notes Processor
+          📘 AI Study Assistant
         </h1>
 
         {error && (
@@ -446,8 +548,7 @@ function App() {
           </h2>
           <div className="mb-6">
             <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
-              📄 Supports: Images (JPG, PNG, etc.) and PDF files with
-              handwritten content
+              📄 Supports: Images (JPG, PNG, etc.) and PDF files with handwritten content
             </p>
             <input
               type="file"
@@ -510,8 +611,7 @@ function App() {
               🧩 Interactive Quiz
             </h2>
             <p className="text-sm text-gray-600 mb-6 bg-purple-50 p-4 rounded-xl border border-purple-200">
-              Test your knowledge with auto-generated quizzes from your notes.
-              Try voice-first mode for hands-free quizzing!
+              Test your knowledge with auto-generated quizzes from your notes. Try voice-first mode for hands-free quizzing!
             </p>
 
             {/* Quiz Controls */}
@@ -551,8 +651,7 @@ function App() {
                       htmlFor="voiceMode"
                       className="text-sm font-medium text-blue-800 flex items-center gap-2"
                     >
-                      🎤 Voice-First Quiz Mode (Questions read aloud, answer by
-                      speaking)
+                      🎤 Voice-First Quiz Mode (Questions read aloud, answer by speaking)
                     </label>
                   </div>
                 )}
@@ -801,8 +900,7 @@ function App() {
               🤖 AI Tutor Chat
             </h2>
             <p className="text-sm text-gray-600 mb-6 bg-green-50 p-4 rounded-xl border border-green-200">
-              Ask questions about your notes. The AI tutor will only use your
-              uploaded material to answer.
+              Ask questions about your notes. The AI tutor will only use your uploaded material to answer.
             </p>
 
             {/* Chat Messages */}
@@ -943,7 +1041,7 @@ function App() {
                         : "text-gray-600 hover:text-gray-800"
                     }`}
                   >
-                    📝 Document
+                    📄 Document
                   </button>
                 </div>
                 <button
@@ -958,10 +1056,22 @@ function App() {
 
             {studyMaterialView === "mdx" ? (
               <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200 prose max-w-none">
-                <MDXRenderer content={processedResult.markdown_content} />
+                <MarkdownRenderer content={processedResult.markdown_content} />
               </div>
             ) : (
               <div className="space-y-8">
+                {/* Formatted Text */}
+                {processedResult.formatted_text && (
+                  <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                    <h3 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800">
+                      📝 Formatted Notes
+                    </h3>
+                    <div className="prose max-w-none">
+                      <MarkdownRenderer content={processedResult.formatted_text} />
+                    </div>
+                  </div>
+                )}
+
                 {/* Bullet Points */}
                 {processedResult.bullets?.length > 0 && (
                   <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
@@ -996,28 +1106,34 @@ function App() {
                       {processedResult.flashcards.map((flashcard, i) => (
                         <div
                           key={i}
-                          className="p-6 bg-white rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:scale-105 border-l-4 border-blue-500"
+                          className="group relative overflow-hidden"
                         >
-                          <div className="flex justify-between items-center mb-4">
-                            <h2 className="font-bold text-lg text-blue-800">
-                              Question
-                            </h2>
-                            <p className="text-sm text-gray-600">
-                              Flashcard {i + 1}
-                            </p>
+                          <div className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:scale-105 border-l-4 border-blue-500 min-h-[200px] cursor-pointer">
+                            <div className="p-6 h-full flex flex-col">
+                              <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-bold text-lg text-blue-800">
+                                  Question
+                                </h4>
+                                <span className="text-sm text-gray-600 bg-blue-50 px-2 py-1 rounded">
+                                  Card {i + 1}
+                                </span>
+                              </div>
+                              <div className="flex-grow">
+                                <p className="font-semibold text-blue-900 text-lg mb-4">
+                                  {flashcard.question}
+                                </p>
+                                <hr className="my-4 border-gray-300" />
+                                <div className="mb-4">
+                                  <h4 className="font-bold text-lg text-green-800 mb-2">
+                                    Answer
+                                  </h4>
+                                  <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                                    {flashcard.answer}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <p className="font-semibold text-blue-900 text-lg mb-2">
-                            {flashcard.question}
-                          </p>
-                          <hr className="my-4 border-gray-300" />
-                          <div className="flex justify-between items-center mb-4">
-                            <h2 className="font-bold text-lg text-blue-800">
-                              Answer
-                            </h2>
-                          </div>
-                          <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                            {flashcard.answer}
-                          </p>
                         </div>
                       ))}
                     </div>
@@ -1030,40 +1146,7 @@ function App() {
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800">
                       🧠 Mind Map
                     </h3>
-                    <div className="overflow-x-auto bg-gradient-to-br from-purple-50 to-pink-50 p-8 rounded-2xl border border-purple-200">
-                      <Tree
-                        lineWidth={"3px"}
-                        lineColor={"#6366F1"}
-                        lineBorderRadius={"10px"}
-                        label={
-                          <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl shadow-lg font-bold text-lg">
-                            {processedResult.mindmap.name}
-                          </div>
-                        }
-                      >
-                        {processedResult.mindmap.children?.map((child, i) => (
-                          <TreeNode
-                            key={i}
-                            label={
-                              <div className="p-3 bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-xl shadow-md font-semibold">
-                                {child.name}
-                              </div>
-                            }
-                          >
-                            {child.children?.map((sub, j) => (
-                              <TreeNode
-                                key={j}
-                                label={
-                                  <div className="p-3 bg-gradient-to-r from-pink-300 to-purple-400 text-white rounded-lg shadow-sm font-medium text-sm">
-                                    {sub.name}
-                                  </div>
-                                }
-                              />
-                            ))}
-                          </TreeNode>
-                        ))}
-                      </Tree>
-                    </div>
+                    <MindMapVisualization mindmap={processedResult.mindmap} />
                   </div>
                 )}
               </div>
@@ -1091,23 +1174,20 @@ function App() {
                 Chat with the AI tutor about your notes (supports voice input!)
               </li>
               <li className="p-2">
-                Generate study materials like bullet points, flashcards, and
-                mind maps
+                Generate study materials like bullet points, flashcards, and mind maps
               </li>
             </ol>
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-600">
               <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
                 <div className="font-medium mb-2">📄 File Support</div>
                 <div>
-                  Upload multi-page handwritten PDFs and various image formats
-                  (JPG, PNG, etc.)
+                  Upload multi-page handwritten PDFs and various image formats (JPG, PNG, etc.)
                 </div>
               </div>
               <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
                 <div className="font-medium mb-2">🧩 Smart Quizzes</div>
                 <div>
-                  Auto-generated MCQ and True/False questions with voice-first
-                  mode
+                  Auto-generated MCQ and True/False questions with voice-first mode
                 </div>
               </div>
               <div className="p-4 bg-green-50 rounded-xl border border-green-200">
