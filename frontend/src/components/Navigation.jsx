@@ -85,7 +85,7 @@ const Navigation = () => {
 
 	return (
 		<>
-		  <title>Ylearn | Home</title>
+			<title>Ylearn | Home</title>
 			<motion.nav
 				initial={{ y: -100 }}
 				animate={{ y: 0 }}
@@ -107,13 +107,18 @@ const Navigation = () => {
 								whileHover={{ scale: 1.05 }}
 								whileTap={{ scale: 0.95 }}
 							>
-								<motion.div
-									className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center"
-									whileHover={{ rotate: 12, scale: 1.1 }}
-									transition={{ type: "spring", stiffness: 400, damping: 10 }}
-								>
-									<span className="text-white font-bold text-lg">AI</span>
-								</motion.div>
+								<motion.img
+									src="ylearn.png"
+									className="w-10 h-10 rounded-lg flex items-center justify-center"
+									initial={{ scale: 0 }}
+									animate={{ scale: 1 }}
+									transition={{
+					          type: "tween",
+										ease: "easeInOut",
+										duration: 0.5,
+										delay: 0.8,
+									}}
+								/>
 								<motion.span
 									className={`font-bold text-xl ${
 										isDark ? "text-white" : "text-gray-900"

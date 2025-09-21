@@ -19,9 +19,9 @@ const Footer = () => {
 	];
 
 	const resources = [
-		{ label: "Privacy", to: "/privacy" },
-		{ label: "Terms", to: "/terms" },
-		{ label: "Status", to: "/status" },
+		{ label: "Privacy", to: "#" },
+		{ label: "Terms", to: "#" },
+		{ label: "Status", to: "#" },
 		// Keep it lean; add Docs/Guides later if needed
 	];
 
@@ -67,19 +67,31 @@ const Footer = () => {
 								className="inline-flex items-center gap-3"
 							>
 								<motion.div
-									className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center"
-									whileHover={{ rotate: 10, scale: 1.04 }}
-									transition={{ type: "spring", stiffness: 400, damping: 14 }}
+									className="flex items-center space-x-3 cursor-pointer"
+									whileHover={{ scale: 1.05 }}
+									whileTap={{ scale: 0.95 }}
 								>
-									<span className="text-white font-bold text-sm">AI</span>
+									<motion.img
+										src="ylearn.png"
+										className="w-10 h-10 rounded-lg flex items-center justify-center"
+										initial={{ scale: 0 }}
+										animate={{ scale: 1 }}
+										transition={{
+											type: "tween",
+											ease: "easeInOut",
+											duration: 0.5,
+											delay: 0.8,
+										}}
+									/>
+									<motion.span
+										className={`font-bold text-xl ${
+											isDark ? "text-white" : "text-gray-900"
+										}`}
+										whileHover={{ color: isDark ? "#60A5FA" : "#2563EB" }}
+									>
+										YLearn
+									</motion.span>
 								</motion.div>
-								<span
-									className={`font-bold text-xl ${
-										isDark ? "text-white" : "text-gray-900"
-									}`}
-								>
-									YLearn
-								</span>
 							</Link>
 
 							<p
@@ -118,7 +130,7 @@ const Footer = () => {
 									/>
 									<button
 										type="submit"
-										className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold"
+										className="p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold"
 										aria-label="Subscribe"
 									>
 										<Send size={16} />
